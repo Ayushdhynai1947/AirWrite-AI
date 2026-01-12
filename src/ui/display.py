@@ -58,18 +58,28 @@ class DisplayUI:
             cv2.rectangle(frame, (x - 5, y + 10), 
                          (x - 5 + bar_width, y + 15), color, -1)
             
-    def draw_stroke_preview(self, frame, current_stroke, color=None):
+    def draw_stroke_preview(self, frame, current_stroke, raw_stroke=None, color=None, show_raw=False):
         """
-        Draw current stroke being written
+        Draw current stroke being written with optional raw overlay
         
         Args:
             frame: OpenCV image
-            current_stroke: List of (x, y) points
+            current_stroke: List of (x, y) smoothed points
+            raw_stroke: List of (x, y) raw points (optional)
             color: Stroke color (default: yellow)
+            show_raw: Show raw stroke overlay
         """
         if color is None:
             color = self.colors['stroke']
+        
+        # Draw raw stroke if requested (lighter color)
+        if show_raw and raw_stroke and len(raw_stroke) >= 2:
+            raw_color = (180, 180, 180)  # Light gray
+            for i in range(1, len(raw_stroke)):
+                cv2.line(frame, raw_stroke[i-1], raw_stroke[i], 
+                        raw_color, 1, cv2.LINE_AA)
             
+        # Draw smoothed stroke
         if len(current_stroke) < 2:
             return
             
@@ -79,7 +89,7 @@ class DisplayUI:
                     color, 3, cv2.LINE_AA)
             
         # Draw circles at each point for smoothness indicator
-        for point in current_stroke:
+        for point in current_stroke[::2]:  # Draw every other point
             cv2.circle(frame, point, 2, color, -1)
             
     def draw_all_strokes(self, frame, all_strokes, color=None):
@@ -135,32 +145,60 @@ class DisplayUI:
             ("☝️  Index up: Write", self.colors['writing']),
             ("✊ Fist: Stop", self.colors['stop']),
             ("✌️  Two fingers: Space", self.colors['space']),
-            ("🤏 Pinch: Clear", self.colors['clear'])
+            ("🤏 Pinch: Clear", self.colors['clear']),
+            ("", (0, 0, 0)),
+            ("Press 's': Toggle smooth", (150, 150, 150)),
+            ("Press 'r': Show raw", (150, 150, 150))
         ]
         
-        line_height = 30
+        line_height = 25
         for i, (text, color) in enumerate(guides):
-            y_pos = y + (i * line_height)
-            cv2.putText(frame, text, (x, y_pos), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            if text:
+                y_pos = y + (i * line_height)
+                cv2.putText(frame, text, (x, y_pos), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
                        
-    def draw_stats(self, frame, stroke_count, position=None):
+    def draw_stats(self, frame, stroke_count, smoothing_enabled=None, smoothing_method=None, position=None):
         """
         Draw statistics
         
         Args:
             frame: OpenCV image
             stroke_count: Number of completed strokes
+            smoothing_enabled: Whether smoothing is enabled
+            smoothing_method: Current smoothing method
             position: (x, y) position
         """
         if position is None:
             height, width = frame.shape[:2]
-            position = (width - 200, 30)
+            position = (width - 300, 30)
             
         x, y = position
+        
+        # Draw stats background
+        cv2.rectangle(frame, (x - 10, y - 25), (x + 290, y + 65), (0, 0, 0), -1)
+        cv2.rectangle(frame, (x - 10, y - 25), (x + 290, y + 65), (100, 100, 100), 2)
+        
+        # Stroke count
         stats_text = f"Strokes: {stroke_count}"
         cv2.putText(frame, stats_text, (x, y), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        
+        # Smoothing status
+        if smoothing_enabled is not None:
+            y += 25
+            smooth_status = "ON" if smoothing_enabled else "OFF"
+            smooth_color = (0, 255, 0) if smoothing_enabled else (0, 0, 255)
+            smooth_text = f"Smoothing: {smooth_status}"
+            cv2.putText(frame, smooth_text, (x, y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, smooth_color, 1)
+        
+        # Smoothing method
+        if smoothing_method and smoothing_enabled:
+            y += 20
+            method_text = f"Method: {smoothing_method[:12]}"
+            cv2.putText(frame, method_text, (x, y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
                    
     def draw_fps(self, frame, fps, position=(10, 30)):
         """
